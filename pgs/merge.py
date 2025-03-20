@@ -14,13 +14,14 @@ def var_key(var):
 
 
 class Inputs:
-    def __init__(self, filenames):
+    def __init__(self, filenames, region):
         self.vcfs = [pysam.VariantFile(fname) for fname in filenames]
-        self.cache = [[] for vcf in self.vcfs]
-        self.next = [next(vcf, None) for vcf in self.vcfs]
+        self.iters = [vcf.fetch(region=region) for vcf in self.vcfs]
+        self.cache = [[] for it in self.iters]
+        self.next = [next(it, None) for it in self.iters]
 
     def _load_next(self):
-        vcf = self.vcfs[0]
+        it = self.iters[0]
         cache = self.cache[0]
         u = self.next[0]
 
@@ -30,7 +31,7 @@ class Inputs:
 
         cache.append(u)
         while True:
-            v = next(vcf, None)
+            v = next(it, None)
             if v is not None and u.chrom == v.chrom and u.pos == v.pos:
                 cache.append(v)
             else:
@@ -39,11 +40,11 @@ class Inputs:
         cache.sort(key=var_key, reverse=True)
         n = len(cache) - 1
 
-        for i, (vcf, cache) in enumerate(zip(self.vcfs[1:], self.cache[1:]), 1):
+        for i, (it, cache) in enumerate(zip(self.iters[1:], self.cache[1:]), 1):
             cache.append(self.next[i])
             for _ in range(n):
-                cache.append(next(vcf, None))
-            self.next[i] = next(vcf, None)
+                cache.append(next(it, None))
+            self.next[i] = next(it, None)
             cache.sort(key=var_key, reverse=True)
         return True
 
@@ -71,11 +72,13 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('-o', '--output', metavar='FILE', required=True,
         help='Output merged VCF file.')
+    parser.add_argument('-r', '--region', metavar='STR',
+        help='Merge specific region.')
     parser.add_argument('input', metavar='FILE', nargs='+',
         help='Input VCF files with the same variants by different samples.')
     args = parser.parse_args()
 
-    inputs = Inputs(args.input)
+    inputs = Inputs(args.input, args.region)
     header = inputs.vcfs[0].header.copy()
     assert len(header.samples) == 1
     samples = { header.samples[0] }
