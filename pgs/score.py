@@ -81,39 +81,15 @@ class PGS:
         return entry
 
 
-def process(pgs, vcf, out, log):
+def process(pgs, vcf, samples, out, log):
     cache = deque()
     for entry in tqdm(pgs):
-        # sys.stderr.write(f'Processing {entry}\n')
-        # while True:
-        #     # sys.stderr.write(f'    Cache size {len(cache)}\n')
-        #     if not cache:
-        #         new_var = next(vcf, None)
-        #         if new_var is None:
-        #             break
-        #         # sys.stderr.write(f'    Append {new_var.chrom}:{new_var.pos}\n')
-        #         cache.append(new_var)
-
-        #     var = cache[0]
-        #     var_end = var.start + len(var.ref)
-        #     # sys.stderr.write(f'    Check  {var.chrom}:{var.pos}-{var_end}\n')
-        #     if entry.chrom_id < var.rid or entry.assumed_end <= var.start:
-        #         # sys.stderr.write(f'    Break\n')
-        #         break
-        #     if var.rid < entry.chrom_id or var_end <= entry.start:
-        #         cache.popleft()
-        #         # sys.stderr.write(f'    Pop left\n')
-        #         continue
-
-        # vars = [var for var in cache if var.start <= entry.start and entry.assumed_end <= var_end]
-        # sys.stderr.write(f'    Select {len(vars)} variants\n')
-
         if entry.chrom_id < sys.maxsize:
             vars = [var for var in vcf.fetch(entry.chrom, entry.start, entry.assumed_end)
                 if var.start <= entry.start and entry.assumed_end <= var.start + len(var.ref)]
         else:
             vars = ()
-        score_entry(entry, vcf.header.samples, vars, out, log)
+        score_entry(entry, samples, vars, out, log)
 
 
 def identify_allele(entry, var):
@@ -199,9 +175,9 @@ def score_entry(entry, samples, vars, out, log):
     for var, ix in zip(subvars, allele_ixs):
         if ix is None:
             continue
-        for i, (sample, gt) in enumerate(var.samples.items()):
-            assert sample == samples[i]
-            dose[i] += gt['GT'].count(ix)
+        for i, sample in enumerate(samples):
+            dose[i] += var.samples[sample]['GT'].count(ix)
+
     if allele_ixs[0] == 0:
         # alt_count = 2 * len(subvars) - ref_count
         # Dose = 2 - alt_count = 2 - 2 * len(subvars) + ref_count.
@@ -223,8 +199,10 @@ def main():
         help='Genome reference.')
     parser.add_argument('-o', '--output', metavar='FILE', required=True,
         help='Output CSV file.')
-    parser.add_argument('-l', '--log', metavar='FILE', required=True,
+    parser.add_argument('-l', '--log', metavar='FILE', default='/dev/null',
         help='Output CSV file describing variant matching.')
+    parser.add_argument('-S', '--samples', metavar='FILE',
+        help='Optional file with a subset samples to process.')
     args = parser.parse_args()
 
     vcf = pysam.VariantFile(args.vcf)
@@ -236,13 +214,20 @@ def main():
     sys.stderr.write(f'Loaded {len(entries)} entries\n')
 
     out = open(args.output, 'w')
-    samples_str = '\t'.join(vcf.header.samples)
+    if args.samples:
+        with open(args.samples) as f:
+            samples = map(str.strip, f)
+            samples = sorted(set(samples) & set(vcf.header.samples))
+    else:
+        samples = list(vcf.header.samples)
+
+    samples_str = '\t'.join(samples)
     out.write(f'rsid\tchrom\tpos\teffect_allele\teffect\t{samples_str}\n')
     log = open(args.log, 'w')
     log.write('rsid\tchrom\tpos\teffect_allele\tvar_pos\tvar_alleles\teffect_ix\tstatus')
 
     sys.stderr.write('Processing VCF file\n')
-    process(entries, vcf, out, log)
+    process(entries, vcf, samples, out, log)
     log.write('\n')
 
 
