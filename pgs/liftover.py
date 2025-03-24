@@ -16,7 +16,7 @@ def open(filename, mode='r'):
         if 'b' not in mode:
             mode += 't'
         return gzip.open(filename, mode)
-    return builtints.open(filename, mode)
+    return builtins.open(filename, mode)
 
 
 class Columns:
