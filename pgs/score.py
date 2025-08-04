@@ -4,7 +4,7 @@ import itertools
 import sys
 from collections import namedtuple, deque
 import pysam
-from tqdm import tqdm
+import datetime
 import numpy as np
 
 from liftover import open
@@ -83,7 +83,10 @@ class PGS:
 
 def process(pgs, vcf, samples, out, log):
     cache = deque()
-    for entry in tqdm(pgs):
+    for i, entry in enumerate(pgs):
+        if i % 10000 == 0:
+            now = datetime.datetime.now().strftime('%H:%M:%S')
+            sys.stderr.write(f'[{now}] {entry.chrom}:{entry.start+1}\n')
         if entry.chrom_id < sys.maxsize:
             vars = [var for var in vcf.fetch(entry.chrom, entry.start, entry.assumed_end)
                 if var.start <= entry.start and entry.assumed_end <= var.start + len(var.ref)]
@@ -228,6 +231,7 @@ def main():
 
     sys.stderr.write('Processing VCF file\n')
     process(entries, vcf, samples, out, log)
+    sys.stderr.write('Success\n')
     log.write('\n')
 
 

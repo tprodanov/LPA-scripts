@@ -24,7 +24,7 @@ class Columns:
         # Convert to dictionary so that we can use `get` to fill missing columns with None.
         col_names = { col: i for i, col in enumerate(line.strip().split('\t')) }
         self.rsid = col_names.get('rsID')
-        self.chrom = col_names.get('chrom_name') or col_names.get('hm_chr')
+        self.chrom = col_names.get('chrom_name') or col_names.get('hm_chr') or col_names.get('chr_name')
         self.pos = col_names.get('chr_position') or col_names.get('hm_pos')
 
         self.effect = col_names.get('effect_allele')
